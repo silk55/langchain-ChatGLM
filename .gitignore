@@ -179,3 +179,5 @@ ptuning-v2/*.json
 ptuning-v2/*.bin
 
 *.log.*
+
+data/

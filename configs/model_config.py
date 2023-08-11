@@ -21,11 +21,11 @@ embedding_model_dict = {
     "text2vec-base-chinese-sentence": "shibing624/text2vec-base-chinese-sentence",
     "text2vec-base-chinese-paraphrase": "shibing624/text2vec-base-chinese-paraphrase",
     "m3e-small": "moka-ai/m3e-small",
-    "m3e-base": "moka-ai/m3e-base",
+    "m3e-base": "data/m3e-base",
 }
 
 # Embedding model name
-EMBEDDING_MODEL = "text2vec"
+EMBEDDING_MODEL = "m3e-base"
 
 # Embedding running device
 EMBEDDING_DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
@@ -130,7 +130,10 @@ llm_model_dict = {
         "local_model_path": None,
         "provides": "LLamaLLMChain"
     },
-
+    # 直接调用返回requests.exceptions.ConnectionError错误，需要通过huggingface_hub包里的snapshot_download函数
+    # 下载模型，如果snapshot_download还是返回网络错误，多试几次，一般是可以的，
+    # 如果仍然不行，则应该是网络加了防火墙(在服务器上这种情况比较常见)，基本只能从别的设备上下载，
+    # 然后转移到目标设备了.
     "bloomz-7b1": {
         "name": "bloomz-7b1",
         "pretrained_model_name": "bigscience/bloomz-7b1",
@@ -152,12 +155,6 @@ llm_model_dict = {
         "pretrained_model_name": "baichuan-inc/baichuan-7B",
         "local_model_path": None,
         "provides": "MOSSLLMChain"
-    },
-    "Baichuan-13b-Chat": {
-        "name": "Baichuan-13b-Chat",
-        "pretrained_model_name": "baichuan-inc/Baichuan-13b-Chat",
-        "local_model_path": None,
-        "provides": "BaichuanLLMChain"
     },
     # llama-cpp模型的兼容性问题参考https://github.com/abetlen/llama-cpp-python/issues/204
     "ggml-vicuna-13b-1.1-q5": {
@@ -209,6 +206,27 @@ llm_model_dict = {
         "api_base_url": "http://localhost:8000/v1",  # "name"修改为fastchat服务中的"api_base_url"
         "api_key": "EMPTY"
     },
+    
+    # 通过 fastchat 调用的模型请参考如下格式
+    "fastchat-llama2-7b": {
+        "name": "llama2",  # "name"修改为fastchat服务中的"model_name"
+        "pretrained_model_name": "llama2",
+        "local_model_path": None,
+        "provides": "FastChatOpenAILLMChain",  # 使用fastchat api时，需保证"provides"为"FastChatOpenAILLM"
+        "api_base_url": "http://localhost:8000/v1",  # "name"修改为fastchat服务中的"api_base_url"
+        "api_key": "EMPTY"
+    },
+    
+    #Llama-2-13b-chat-hf
+        # 通过 fastchat 调用的模型请参考如下格式
+    "fastchat-llama2-13b-chat": {
+        "name": "llama213BChat",  # "name"修改为fastchat服务中的"model_name"
+        "pretrained_model_name": "llama213BChat",
+        "local_model_path": None,
+        "provides": "FastChatOpenAILLMChain",  # 使用fastchat api时，需保证"provides"为"FastChatOpenAILLM"
+        "api_base_url": "http://localhost:8000/v1",  # "name"修改为fastchat服务中的"api_base_url"
+        "api_key": "EMPTY"
+    },
     # 调用chatgpt时如果报出： urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.openai.com', port=443):
     #  Max retries exceeded with url: /v1/chat/completions
     # 则需要将urllib3版本修改为1.25.11
@@ -231,7 +249,7 @@ llm_model_dict = {
 }
 
 # LLM 名称
-LLM_MODEL = "chatglm2-6b-32k"
+LLM_MODEL = "fastchat-llama2-13b-chat"
 # 量化加载8bit 模型
 LOAD_IN_8BIT = False
 # Load the model with bfloat16 precision. Requires NVIDIA Ampere GPU.
@@ -247,9 +265,6 @@ USE_LORA = True if LORA_NAME else False
 # LLM streaming reponse
 STREAMING = True
 
-# 直接定义baichuan的lora完整路径即可,"" != False
-LORA_MODEL_PATH_BAICHUAN=None
-
 # Use p-tuning-v2 PrefixEncoder
 USE_PTUNING_V2 = False
 PTUNING_DIR='./ptuning-v2'
@@ -260,10 +275,10 @@ LLM_DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mp
 KB_ROOT_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "knowledge_base")
 
 # 基于上下文的prompt模版，请务必保留"{question}"和"{context}"
-PROMPT_TEMPLATE = """已知信息：
+PROMPT_TEMPLATE = """Known：
 {context} 
 
-根据上述已知信息，简洁和专业的来回答用户的问题。如果无法从中得到答案，请说 “根据已知信息无法回答该问题” 或 “没有提供足够的相关信息”，不允许在答案中添加编造成分，答案请使用中文。 问题是：{question}"""
+Answer users' questions succinctly and professionally based on the above known information. If you cannot get an answer from it, please say "cannot answer the question based on known information" or "did not provide enough relevant information". It is not allowed to add fabricated elements to the answer。 question is：{question}"""
 
 # 缓存知识库数量,如果是ChatGLM2,ChatGLM2-int4,ChatGLM2-int8模型若检索效果不好可以调成’10’
 CACHED_VS_NUM = 1
@@ -316,3 +331,5 @@ BING_SUBSCRIPTION_KEY = ""
 # 通过增加标题判断，判断哪些文本为标题，并在metadata中进行标记；
 # 然后将文本与往上一级的标题进行拼合，实现文本信息的增强。
 ZH_TITLE_ENHANCE = False
+
+LORA_MODEL_PATH_BAICHUAN = ""
