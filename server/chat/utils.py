@@ -1,6 +1,8 @@
 import asyncio
 from typing import Awaitable
 from pydantic import BaseModel, Field
+import logging
+from langchain.schema import SystemMessage, AIMessage, HumanMessage
 
 
 async def wrap_done(fn: Awaitable, event: asyncio.Event):
@@ -9,7 +11,8 @@ async def wrap_done(fn: Awaitable, event: asyncio.Event):
         await fn
     except Exception as e:
         # TODO: handle exception
-        print(f"Caught exception: {e}")
+        # print(f"Caught exception: {e}")
+        logging.exception(e)
     finally:
         # Signal the aiter to stop.
         event.set()
@@ -28,3 +31,6 @@ class History(BaseModel):
 
     def to_msg_tuple(self):
         return "ai" if self.role=="assistant" else "human", self.content
+
+    def to_langchain_message(self):
+        return AIMessage(content=self.content) if self.role=="assistant" else HumanMessage(content=self.content) 

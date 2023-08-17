@@ -5,3 +5,5 @@ logs
 __pycache__/
 knowledge_base/
 configs/model_config.py
+docs/docker
+rice

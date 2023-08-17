@@ -443,3 +443,16 @@ python webui_alline.py --model-path-address model@host@port --num-gpus 2 --gpus 
 <img src="img/qr_code_53.jpg" alt="二维码" width="300" height="300" />
 
 🎉 langchain-ChatGLM 项目微信交流群，如果你也对本项目感兴趣，欢迎加入群聊参与讨论交流。
+
+python3 -m fastchat.serve.controller
+python3 -m fastchat.serve.model_worker --model-path /data/llama213BChat --num-gpus 2 --help
+python3 -m fastchat.serve.openai_api_server --host localhost --port 8000
+
+
+--load-8bit
+
+
+
+python3 -m fastchat.serve.controller
+python3 -m fastchat.serve.model_worker --model-path /data/llama213BChat --num-gpus 2 --max-gpu-memory 18Gib
+python3 -m fastchat.serve.openai_api_server --host localhost --port 8000

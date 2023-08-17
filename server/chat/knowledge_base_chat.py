@@ -16,7 +16,16 @@ from server.knowledge_base.kb_service.base import KBService, KBServiceFactory
 import json
 import os
 from urllib.parse import urlencode
-
+from langchain.agents.agent_toolkits import create_retriever_tool
+from langchain.schema import SystemMessage, AIMessage, HumanMessage
+from langchain.agents import OpenAIFunctionsAgent, AgentExecutor
+from langchain.agents.openai_functions_agent.agent_token_buffer_memory import (
+    AgentTokenBufferMemory,
+)
+from langchain.prompts import MessagesPlaceholder
+from langchain.callbacks import StreamlitCallbackHandler
+import streamlit as st
+from langchain.agents.agent_toolkits import create_conversational_retrieval_agent
 
 def knowledge_base_chat(query: str = Body(..., description="用户输入", examples=["你好"]),
                         knowledge_base_name: str = Body(..., description="知识库名称", examples=["samples"]),
@@ -53,43 +62,75 @@ def knowledge_base_chat(query: str = Body(..., description="用户输入", examp
             openai_api_base=llm_model_dict[LLM_MODEL]["api_base_url"],
             model_name=LLM_MODEL
         )
-        docs = kb.search_docs(query, top_k)
-        context = "\n".join([doc.page_content for doc in docs])
+        
+        def configure_retriever():
+            return kb.to_langchain_receiver(top_k=top_k)
+        
+        tool = create_retriever_tool(
+            configure_retriever(),
+            "search_langsmith_docs",
+            "Searches and returns documents regarding LangSmith. LangSmith is a platform for debugging, testing, evaluating, and monitoring LLM applications. You do not know anything about LangSmith, so if you are ever asked about LangSmith you should use this tool.",
+        )
+        
+        tools = [tool]
+        message = SystemMessage(
+            content=(
+                    f"You are a helpful chatbot who is tasked with answering questions about {knowledge_base_name}, "
+                    f"Unless otherwise explicitly stated, it is probably fair to assume that questions are about {knowledge_base_name}, "
+                    "If there is any ambiguity, you probably assume they are about that."
+                )
+        )
+        prompt = OpenAIFunctionsAgent.create_prompt(
+            system_message=message,
+            extra_prompt_messages=[MessagesPlaceholder(variable_name="history")],
+        )
+        agent = OpenAIFunctionsAgent(llm=model, tools=tools, prompt=prompt)
+        
+        agent_executor = AgentExecutor(
+            agent=agent,
+            tools=tools,
+            verbose=True,
+            return_intermediate_steps=True,
+        )
+        # agent_executor = create_conversational_retrieval_agent(model, tools, verbose=True)
+        
+        
 
-        chat_prompt = ChatPromptTemplate.from_messages(
-            [i.to_msg_tuple() for i in history] + [("human", PROMPT_TEMPLATE)])
+        # chat_prompt = ChatPromptTemplate.from_messages(
+        #     [i.to_msg_tuple() for i in history] + [("human", PROMPT_TEMPLATE)])
 
-        chain = LLMChain(prompt=chat_prompt, llm=model)
+        # chain = LLMChain(prompt=chat_prompt, llm=model)
 
         # Begin a task that runs in the background.
+
         task = asyncio.create_task(wrap_done(
-            chain.acall({"context": context, "question": query}),
+            agent_executor.acall(inputs={"input": query, "history":[i.to_langchain_message() for i in history] }),
             callback.done),
         )
 
-        source_documents = []
-        for inum, doc in enumerate(docs):
-            filename = os.path.split(doc.metadata["source"])[-1]
-            if local_doc_url:
-                url = "file://" + doc.metadata["source"]
-            else:
-                parameters = urlencode({"knowledge_base_name": knowledge_base_name, "file_name":filename})
-                url = f"{request.base_url}knowledge_base/download_doc?" + parameters
-            text = f"""出处 [{inum + 1}] [{filename}]({url}) \n\n{doc.page_content}\n\n"""
-            source_documents.append(text)
+        # source_documents = []
+        # for inum, doc in enumerate(docs):
+        #     filename = os.path.split(doc.metadata["source"])[-1]
+        #     if local_doc_url:
+        #         url = "file://" + doc.metadata["source"]
+        #     else:
+        #         parameters = urlencode({"knowledge_base_name": knowledge_base_name, "file_name":filename})
+        #         url = f"{request.base_url}knowledge_base/download_doc?" + parameters
+        #     text = f"""出处 [{inum + 1}] [{filename}]({url}) \n\n{doc.page_content}\n\n"""
+        #     source_documents.append(text)
 
         if stream:
             async for token in callback.aiter():
                 # Use server-sent-events to stream the response
                 yield json.dumps({"answer": token,
-                                  "docs": source_documents},
+                                  "docs": ""},
                                  ensure_ascii=False)
         else:
             answer = ""
             async for token in callback.aiter():
                 answer += token
             yield json.dumps({"answer": answer,
-                              "docs": source_documents},
+                              "docs": ""},
                              ensure_ascii=False)
 
         await task

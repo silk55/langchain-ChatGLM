@@ -8,7 +8,9 @@ from configs.model_config import SCORE_THRESHOLD, kbs_config
 
 from server.knowledge_base.kb_service.base import KBService, SupportedVSType
 from server.knowledge_base.utils import KnowledgeFile
-
+from langchain.vectorstores import Milvus
+from configs.model_config import (kbs_config, VECTOR_SEARCH_TOP_K,
+                                  EMBEDDING_DEVICE, EMBEDDING_MODEL)
 
 class MilvusKBService(KBService):
     milvus: Milvus
@@ -21,7 +23,7 @@ class MilvusKBService(KBService):
     @staticmethod
     def search(milvus_name, content, limit=3):
         search_params = {
-            "metric_type": "L2",
+            "metric_type": "IP",
             "params": {"nprobe": 10},
         }
         c = MilvusKBService.get_collection(milvus_name)
@@ -71,6 +73,11 @@ class MilvusKBService(KBService):
     def do_clear_vs(self):
         self.milvus.col.drop()
 
+    def to_langchain_receiver(self,
+                             top_k: int = VECTOR_SEARCH_TOP_K,
+                            ):
+        self._load_milvus()
+        return self.milvus.as_retriever(search_kwargs={"k": top_k})
 
 if __name__ == '__main__':
     # 测试建表使用

@@ -102,6 +102,7 @@ class KBService(ABC):
             self.delete_doc(kb_file)
             return self.add_doc(kb_file)
         
+        
     def exist_doc(self, file_name: str):
         return doc_exists(KnowledgeFile(knowledge_base_name=self.kb_name,
                                         filename=file_name))
@@ -123,7 +124,16 @@ class KBService(ABC):
         创建知识库子类实自己逻辑
         """
         pass
-
+    
+    @abstractmethod
+    def to_langchain_receiver(self,
+                              top_k: int = VECTOR_SEARCH_TOP_K,
+                              ):
+        """_summary_
+        转换为langchain标准vector
+        """
+        pass
+        
     @staticmethod
     def list_kbs_type():
         return list(kbs_config.keys())

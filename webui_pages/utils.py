@@ -317,6 +317,8 @@ class ApiRequest:
                 stream=True,
             )
             return self._httpx_stream2generator(response, as_json=True)
+        
+        
 
     def search_engine_chat(
         self,
